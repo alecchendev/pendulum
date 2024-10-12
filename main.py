@@ -8,7 +8,7 @@ WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 
-GRAVITY = 9.81
+GRAVITY = 9.81 / 2
 AIR_RESISTANCE = 0.2
 
 MOVE_SENSITIVITY = 8
@@ -45,7 +45,7 @@ class Pendulum:
         self.bob_vel -= projection
 
         # Zero it out if it's really small
-        if numpy.sqrt(self.bob_vel.dot(self.bob_vel)) < 0.01:
+        if numpy.sqrt(self.bob_vel.dot(self.bob_vel)) < 0.001:
             self.bob_vel = numpy.array([0., 0.])
 
         self.bob_pos += self.bob_vel * dt
@@ -85,7 +85,7 @@ def main():
     pygame.display.set_caption("Pendulum Simulation")
 
     # Time step
-    dt = 0.5
+    dt = 0.25
 
     clock = pygame.time.Clock()
 
