@@ -1,4 +1,3 @@
-from typing import Tuple
 import pygame
 import math
 import numpy
@@ -60,11 +59,14 @@ class Pendulum:
         diff = length - self.rod_length
         self.bob_pos += rod_to_pivot_norm * diff
 
-    def move_left(self, dt: float):
-        self.pivot_pos += numpy.array([-1., 0.]) * dt * MOVE_SENSITIVITY
+    def move_left(self, sensitivity: float):
+        self.move_horizontal(-sensitivity)
 
-    def move_right(self, dt: float):
-        self.pivot_pos += numpy.array([1., 0.]) * dt * MOVE_SENSITIVITY
+    def move_right(self, sensitivity: float):
+        self.move_horizontal(sensitivity)
+
+    def move_horizontal(self, amount: float):
+        self.pivot_pos += numpy.array([1., 0.]) * amount
 
     def move_to_horizontal(self, x_pos: float):
         self.pivot_pos[0] = x_pos
@@ -89,7 +91,7 @@ def main():
 
     clock = pygame.time.Clock()
 
-    pendulum = Pendulum(numpy.array([width // 2., height // 4.]), 1 * math.pi / 4)
+    pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 7 * math.pi / 8)
     prev_mouse_x = 0
 
     running = True
@@ -100,9 +102,9 @@ def main():
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
-            pendulum.move_left(dt)
+            pendulum.move_left(MOVE_SENSITIVITY)
         if keys[pygame.K_RIGHT]:
-            pendulum.move_right(dt)
+            pendulum.move_right(MOVE_SENSITIVITY)
 
         # There's a bug in pygame it seems
         # where sometimes right as your
