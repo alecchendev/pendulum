@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import pygame
 import math
 import numpy
@@ -8,7 +9,7 @@ BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 
 GRAVITY = 9.81 / 2
-AIR_RESISTANCE = 0.2
+AIR_RESISTANCE = 0.1
 
 MOVE_SENSITIVITY = 8
 
@@ -77,6 +78,41 @@ class Pendulum:
         self.pivot_pos[0] = min(self.pivot_pos[0], bottom_right[0])
         self.pivot_pos[1] = min(self.pivot_pos[1], bottom_right[1])
 
+class Player:
+    @abstractmethod
+    def play(self, pendulum: Pendulum):
+        raise NotImplementedError()
+
+class HumanPlayer(Player):
+    def __init__(self):
+        self.prev_mouse_x = 0
+
+    def play(self, pendulum: Pendulum):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT]:
+            pendulum.move_left(MOVE_SENSITIVITY)
+        if keys[pygame.K_RIGHT]:
+            pendulum.move_right(MOVE_SENSITIVITY)
+
+        # There's a bug in pygame it seems
+        # where sometimes right as your
+        # mouse goes off screen you get a much higher
+        # value randomly.
+        mouse_x, _ = pygame.mouse.get_pos()
+        if self.prev_mouse_x != mouse_x:
+            pendulum.move_to_horizontal(mouse_x)
+            self.prev_mouse_x = mouse_x
+
+class PhysicsPlayer(Player):
+    def play(self, pendulum: Pendulum):
+        if pendulum.angle < math.pi / 2 and pendulum.angle > -math.pi / 2:
+            # do nothing
+            return
+        if (pendulum.angle > math.pi / 2):
+            pendulum.move_right(MOVE_SENSITIVITY)
+        if (pendulum.angle < -math.pi / 2):
+            pendulum.move_left(MOVE_SENSITIVITY)
+
 def main():
     # Initialize Pygame
     pygame.init()
@@ -92,7 +128,8 @@ def main():
     clock = pygame.time.Clock()
 
     pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 7 * math.pi / 8)
-    prev_mouse_x = 0
+    # player = HumanPlayer()
+    player = PhysicsPlayer()
 
     running = True
     while running:
@@ -100,20 +137,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            pendulum.move_left(MOVE_SENSITIVITY)
-        if keys[pygame.K_RIGHT]:
-            pendulum.move_right(MOVE_SENSITIVITY)
-
-        # There's a bug in pygame it seems
-        # where sometimes right as your
-        # mouse goes off screen you get a much higher
-        # value randomly.
-        mouse_x, _ = pygame.mouse.get_pos()
-        if prev_mouse_x != mouse_x:
-            pendulum.move_to_horizontal(mouse_x)
-            prev_mouse_x = mouse_x
+        player.play(pendulum)
 
         padding = 100
         pendulum.enforce_bounds(numpy.array([padding, padding]), numpy.array([width - padding, height - padding]))
