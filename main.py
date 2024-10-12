@@ -66,6 +66,9 @@ class Pendulum:
     def move_right(self, dt: float):
         self.pivot_pos += numpy.array([1., 0.]) * dt * MOVE_SENSITIVITY
 
+    def move_to_horizontal(self, x_pos: float):
+        self.pivot_pos[0] = x_pos
+
 def main():
     # Initialize Pygame
     pygame.init()
@@ -81,6 +84,7 @@ def main():
     clock = pygame.time.Clock()
 
     pendulum = Pendulum(numpy.array([width // 2., height // 4.]), 1 * math.pi / 4)
+    prev_mouse_x = 0
 
     running = True
     while running:
@@ -93,6 +97,11 @@ def main():
             pendulum.move_left(dt)
         if keys[pygame.K_RIGHT]:
             pendulum.move_right(dt)
+
+        mouse_x, _ = pygame.mouse.get_pos()
+        if prev_mouse_x != mouse_x:
+            pendulum.move_to_horizontal(mouse_x)
+            prev_mouse_x = mouse_x
 
         pendulum.step(dt)
         pivot_pos = (pendulum.pivot_pos[0], pendulum.pivot_pos[1])
