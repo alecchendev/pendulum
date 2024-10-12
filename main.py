@@ -69,6 +69,12 @@ class Pendulum:
     def move_to_horizontal(self, x_pos: float):
         self.pivot_pos[0] = x_pos
 
+    def enforce_bounds(self, top_left: numpy.ndarray, bottom_right: numpy.ndarray):
+        self.pivot_pos[0] = max(self.pivot_pos[0], top_left[0])
+        self.pivot_pos[1] = max(self.pivot_pos[1], top_left[1])
+        self.pivot_pos[0] = min(self.pivot_pos[0], bottom_right[0])
+        self.pivot_pos[1] = min(self.pivot_pos[1], bottom_right[1])
+
 def main():
     # Initialize Pygame
     pygame.init()
@@ -98,12 +104,19 @@ def main():
         if keys[pygame.K_RIGHT]:
             pendulum.move_right(dt)
 
+        # There's a bug in pygame it seems
+        # where sometimes right as your
+        # mouse goes off screen you get a much higher
+        # value randomly.
         mouse_x, _ = pygame.mouse.get_pos()
         if prev_mouse_x != mouse_x:
             pendulum.move_to_horizontal(mouse_x)
             prev_mouse_x = mouse_x
 
+        padding = 100
+        pendulum.enforce_bounds(numpy.array([padding, padding]), numpy.array([width - padding, height - padding]))
         pendulum.step(dt)
+
         pivot_pos = (pendulum.pivot_pos[0], pendulum.pivot_pos[1])
         bob_pos = (pendulum.bob_pos[0], pendulum.bob_pos[1])
 
