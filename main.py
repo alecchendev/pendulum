@@ -9,14 +9,14 @@ BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 
 GRAVITY = 9.81
-AIR_RESISTANCE = 0.25
+AIR_RESISTANCE = 0.2
 
 class Pendulum:
-    def __init__(self, screen_dims: Tuple[int, int]):
+    def __init__(self, pivot_pos: numpy.ndarray, angle: float):
         self.rod_length = 200
-        self.angle = math.pi / 4 # relative to down, right is positive
-        width, height = screen_dims
-        self.pivot_pos = numpy.array([width // 2., height // 2.])
+        # relative to down, right is positive
+        self.angle = angle
+        self.pivot_pos = pivot_pos
         rod = numpy.array([math.sin(self.angle), math.cos(self.angle)]) * self.rod_length
         self.bob_pos = self.pivot_pos + rod
         self.bob_vel = numpy.array([0., 0.])
@@ -68,11 +68,11 @@ def main():
     pygame.display.set_caption("Pendulum Simulation")
 
     # Time step
-    dt = 1
+    dt = 0.5
 
     clock = pygame.time.Clock()
 
-    pendulum = Pendulum((width, height))
+    pendulum = Pendulum(numpy.array([width // 2., height // 4.]), 1 * math.pi / 4)
 
     running = True
     while running:
