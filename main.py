@@ -11,6 +11,8 @@ RED = (255, 0, 0)
 GRAVITY = 9.81
 AIR_RESISTANCE = 0.2
 
+MOVE_SENSITIVITY = 8
+
 class Pendulum:
     def __init__(self, pivot_pos: numpy.ndarray, angle: float):
         self.rod_length = 200
@@ -58,6 +60,12 @@ class Pendulum:
         diff = length - self.rod_length
         self.bob_pos += rod_to_pivot_norm * diff
 
+    def move_left(self, dt: float):
+        self.pivot_pos += numpy.array([-1., 0.]) * dt * MOVE_SENSITIVITY
+
+    def move_right(self, dt: float):
+        self.pivot_pos += numpy.array([1., 0.]) * dt * MOVE_SENSITIVITY
+
 def main():
     # Initialize Pygame
     pygame.init()
@@ -79,6 +87,12 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT]:
+            pendulum.move_left(dt)
+        if keys[pygame.K_RIGHT]:
+            pendulum.move_right(dt)
 
         pendulum.step(dt)
         pivot_pos = (pendulum.pivot_pos[0], pendulum.pivot_pos[1])
