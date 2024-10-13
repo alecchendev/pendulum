@@ -2,6 +2,8 @@ from abc import abstractmethod
 import pygame
 import math
 import numpy
+import torch
+import torch.nn as nn
 
 # Colors
 WHITE = (255, 255, 255)
@@ -137,6 +139,43 @@ class PhysicsPlayer(Player):
         if (pendulum.angle < -math.pi / 2):
             pendulum.move_left(MOVE_SENSITIVITY)
 
+# input: pivot pos, bob pos, bob vel (3x 2d vectors -> 6 floats)
+# output: move left, move right, do nothing (3 floats)
+
+class NeuralNetwork(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.flatten = nn.Flatten()
+        self.linear_stack = nn.Sequential(
+            nn.Linear(6, 6),
+            nn.ReLU(),
+            nn.Linear(6, 6),
+            nn.ReLU(),
+            nn.Linear(6, 3),
+        )
+
+    def forward(self, x):
+        logits = self.linear_stack(x)
+        return logits
+
+class NeuralNetPlayer(Player):
+    def __init__(self):
+        self.model = NeuralNetwork()
+
+    def play(self, pendulum: Pendulum):
+        pivot_pos_torch = torch.tensor(pendulum.pivot_pos, dtype=torch.float32)
+        bob_pos_torch = torch.tensor(pendulum.bob_pos, dtype=torch.float32)
+        bob_vel_torch = torch.tensor(pendulum.bob_vel, dtype=torch.float32)
+        input_vec = torch.cat((pivot_pos_torch, bob_pos_torch, bob_vel_torch))
+        logits = self.model(input_vec)
+        action = torch.argmax(logits)
+        print(action)
+        if action == 0:
+            pendulum.move_left(MOVE_SENSITIVITY)
+        elif action == 1:
+            pendulum.move_right(MOVE_SENSITIVITY)
+        # if action == 2, do nothing
+
 def main():
     # Initialize Pygame
     pygame.init()
@@ -152,7 +191,7 @@ def main():
     clock = pygame.time.Clock()
 
     pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
-    player = PhysicsPlayer()
+    player = NeuralNetPlayer()
 
     running = True
     while running:
@@ -165,6 +204,8 @@ def main():
             player = HumanPlayer()
         elif keys[pygame.K_2]:
             player = PhysicsPlayer()
+        elif keys[pygame.K_3]:
+            player = NeuralNetPlayer()
 
         player.play(pendulum)
 
