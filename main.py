@@ -104,10 +104,34 @@ class HumanPlayer(Player):
             self.prev_mouse_x = mouse_x
 
 class PhysicsPlayer(Player):
+    def __init__(self):
+        self.doing_a_thing_countdown = 0
+        self.waiting = False
+        self.moving_right = False
+
     def play(self, pendulum: Pendulum):
-        if pendulum.angle < math.pi / 2 and pendulum.angle > -math.pi / 2:
-            # do nothing
+        if self.doing_a_thing_countdown > 0:
+            if self.waiting:
+                pendulum.move_left(MOVE_SENSITIVITY)
+            elif self.moving_right:
+                pendulum.move_right(MOVE_SENSITIVITY)
+            self.doing_a_thing_countdown -= 1
             return
+        if self.doing_a_thing_countdown == 0:
+            self.waiting = False
+            self.moving_right = False
+        if pendulum.angle < math.pi / 2 and pendulum.angle > -math.pi / 2:
+            # if it's swinging, move left and wait
+            if numpy.sqrt(pendulum.bob_vel.dot(pendulum.bob_vel)) > 0.001:
+                self.doing_a_thing_countdown = 100
+                self.waiting = True
+            # if it's still, do a new thing
+            else:
+                self.doing_a_thing_countdown = 100
+                self.moving_right = True
+            return
+        # This works if it's at the right angle already in the air,
+        # the other stuff just does a thing, doesn't really work.
         if (pendulum.angle > math.pi / 2):
             pendulum.move_right(MOVE_SENSITIVITY)
         if (pendulum.angle < -math.pi / 2):
@@ -127,8 +151,7 @@ def main():
 
     clock = pygame.time.Clock()
 
-    pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 7 * math.pi / 8)
-    # player = HumanPlayer()
+    pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
     player = PhysicsPlayer()
 
     running = True
@@ -136,6 +159,12 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_1]:
+            player = HumanPlayer()
+        elif keys[pygame.K_2]:
+            player = PhysicsPlayer()
 
         player.play(pendulum)
 
