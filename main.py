@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from typing import Tuple
 import pygame
 import math
 import numpy
@@ -74,11 +75,9 @@ class Pendulum:
     def move_to_horizontal(self, x_pos: float):
         self.pivot_pos[0] = x_pos
 
-    def enforce_bounds(self, top_left: numpy.ndarray, bottom_right: numpy.ndarray):
-        self.pivot_pos[0] = max(self.pivot_pos[0], top_left[0])
-        self.pivot_pos[1] = max(self.pivot_pos[1], top_left[1])
-        self.pivot_pos[0] = min(self.pivot_pos[0], bottom_right[0])
-        self.pivot_pos[1] = min(self.pivot_pos[1], bottom_right[1])
+    def enforce_bounds(self, min_x: int, max_x: int):
+        self.pivot_pos[0] = max(self.pivot_pos[0], min_x)
+        self.pivot_pos[0] = min(self.pivot_pos[0], max_x)
 
 class Player:
     @abstractmethod
@@ -176,6 +175,22 @@ class NeuralNetPlayer(Player):
             pendulum.move_right(MOVE_SENSITIVITY)
         # if action == 2, do nothing
 
+class Game:
+    def __init__(self, dt: float, padding: int, width: int, pendulum: Pendulum, player: Player):
+        self.dt = dt
+        self.min_x = padding
+        self.max_x = width - padding
+        self.pendulum = pendulum
+        self.player = player
+
+    def step(self):
+        self.player.play(self.pendulum)
+        self.pendulum.enforce_bounds(self.min_x, self.max_x)
+        self.pendulum.step(self.dt)
+
+    def set_player(self, player: Player):
+        self.player = player
+
 def main():
     # Initialize Pygame
     pygame.init()
@@ -185,13 +200,11 @@ def main():
     screen = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Pendulum Simulation")
 
-    # Time step
-    dt = 0.25
-
     clock = pygame.time.Clock()
 
     pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
     player = NeuralNetPlayer()
+    game = Game(0.25, 100, width, pendulum, player)
 
     running = True
     while running:
@@ -201,18 +214,15 @@ def main():
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_1]:
-            player = HumanPlayer()
+            game.set_player(HumanPlayer())
         elif keys[pygame.K_2]:
-            player = PhysicsPlayer()
+            game.set_player(PhysicsPlayer())
         elif keys[pygame.K_3]:
-            player = NeuralNetPlayer()
+            game.set_player(NeuralNetPlayer())
 
-        player.play(pendulum)
+        game.step()
 
-        padding = 100
-        pendulum.enforce_bounds(numpy.array([padding, padding]), numpy.array([width - padding, height - padding]))
-        pendulum.step(dt)
-
+        pendulum = game.pendulum
         pivot_pos = (pendulum.pivot_pos[0], pendulum.pivot_pos[1])
         bob_pos = (pendulum.bob_pos[0], pendulum.bob_pos[1])
 
@@ -222,8 +232,6 @@ def main():
         # Draw the pendulum
         pygame.draw.line(screen, BLACK, pivot_pos, bob_pos, 2)
         pygame.draw.circle(screen, BLACK, bob_pos, 10)
-
-        # Draw force and pivot
 
         # Update the display
         pygame.display.flip()
