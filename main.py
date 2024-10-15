@@ -81,14 +81,14 @@ class Pendulum:
 
 class Player:
     @abstractmethod
-    def play(self, pendulum: Pendulum):
+    def play(self, pendulum: Pendulum, settings: Tuple[float, int, int]):
         raise NotImplementedError()
 
 class HumanPlayer(Player):
     def __init__(self):
         self.prev_mouse_x = 0
 
-    def play(self, pendulum: Pendulum):
+    def play(self, pendulum: Pendulum, settings: Tuple[float, int, int]):
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
             pendulum.move_left(MOVE_SENSITIVITY)
@@ -110,7 +110,7 @@ class PhysicsPlayer(Player):
         self.waiting = False
         self.moving_right = False
 
-    def play(self, pendulum: Pendulum):
+    def play(self, pendulum: Pendulum, settings: Tuple[float, int, int]):
         if self.doing_a_thing_countdown > 0:
             if self.waiting:
                 pendulum.move_left(MOVE_SENSITIVITY)
@@ -146,11 +146,11 @@ class NeuralNetwork(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_stack = nn.Sequential(
-            nn.Linear(6, 6),
+            nn.Linear(9, 64),
             nn.ReLU(),
-            nn.Linear(6, 6),
+            nn.Linear(64, 16),
             nn.ReLU(),
-            nn.Linear(6, 3),
+            nn.Linear(16, 3),
         )
 
     def forward(self, x):
@@ -161,14 +161,14 @@ class NeuralNetPlayer(Player):
     def __init__(self):
         self.model = NeuralNetwork()
 
-    def play(self, pendulum: Pendulum):
+    def play(self, pendulum: Pendulum, settings: Tuple[float, int, int]):
         pivot_pos_torch = torch.tensor(pendulum.pivot_pos, dtype=torch.float32)
         bob_pos_torch = torch.tensor(pendulum.bob_pos, dtype=torch.float32)
         bob_vel_torch = torch.tensor(pendulum.bob_vel, dtype=torch.float32)
-        input_vec = torch.cat((pivot_pos_torch, bob_pos_torch, bob_vel_torch))
+        settings_torch = torch.tensor(list(settings), dtype=torch.float32)
+        input_vec = torch.cat((pivot_pos_torch, bob_pos_torch, bob_vel_torch, settings_torch))
         logits = self.model(input_vec)
         action = torch.argmax(logits)
-        print(action)
         if action == 0:
             pendulum.move_left(MOVE_SENSITIVITY)
         elif action == 1:
@@ -184,12 +184,15 @@ class Game:
         self.player = player
 
     def step(self):
-        self.player.play(self.pendulum)
+        self.player.play(self.pendulum, self.settings())
         self.pendulum.enforce_bounds(self.min_x, self.max_x)
         self.pendulum.step(self.dt)
 
     def set_player(self, player: Player):
         self.player = player
+
+    def settings(self) -> Tuple[float, int, int]:
+        return self.dt, self.min_x, self.max_x
 
 def main():
     # Initialize Pygame
@@ -202,9 +205,10 @@ def main():
 
     clock = pygame.time.Clock()
 
-    pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
-    player = NeuralNetPlayer()
-    game = Game(0.25, 100, width, pendulum, player)
+    # pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
+    # player = NeuralNetPlayer()
+    # game = Game(0.25, 100, width, pendulum, player)
+    games = [Game(0.25, 100, width, Pendulum(numpy.array([width // 2., height // 2.]), 2 * math.pi / 10 * i), NeuralNetPlayer()) for i in range(10)]
 
     running = True
     while running:
@@ -212,26 +216,31 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_1]:
-            game.set_player(HumanPlayer())
-        elif keys[pygame.K_2]:
-            game.set_player(PhysicsPlayer())
-        elif keys[pygame.K_3]:
-            game.set_player(NeuralNetPlayer())
+        # keys = pygame.key.get_pressed()
+        # if keys[pygame.K_1]:
+        #     game.set_player(HumanPlayer())
+        # elif keys[pygame.K_2]:
+        #     game.set_player(PhysicsPlayer())
+        # elif keys[pygame.K_3]:
+        #     game.set_player(NeuralNetPlayer())
+        #
+        # game.step()
+        #
+        # pendulum = game.pendulum
 
-        game.step()
-
-        pendulum = game.pendulum
-        pivot_pos = (pendulum.pivot_pos[0], pendulum.pivot_pos[1])
-        bob_pos = (pendulum.bob_pos[0], pendulum.bob_pos[1])
+        for game in games:
+            game.step()
 
         # Clear the screen
         screen.fill(WHITE)
 
         # Draw the pendulum
-        pygame.draw.line(screen, BLACK, pivot_pos, bob_pos, 2)
-        pygame.draw.circle(screen, BLACK, bob_pos, 10)
+        for i, game in enumerate(games):
+            pivot_pos = (game.pendulum.pivot_pos[0], game.pendulum.pivot_pos[1])
+            bob_pos = (game.pendulum.bob_pos[0], game.pendulum.bob_pos[1])
+            color = (255 // len(games) * i, 0, 255)
+            pygame.draw.line(screen, color, pivot_pos, bob_pos, 2)
+            pygame.draw.circle(screen, color, bob_pos, 10)
 
         # Update the display
         pygame.display.flip()
