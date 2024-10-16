@@ -17,8 +17,8 @@ AIR_RESISTANCE = 0.1
 MOVE_SENSITIVITY = 8
 
 class Pendulum:
-    def __init__(self, pivot_pos: numpy.ndarray, angle: float):
-        self.rod_length = 200
+    def __init__(self, pivot_pos: numpy.ndarray, angle: float, rod_length: int):
+        self.rod_length = rod_length
         # relative to down, right is positive
         self.angle = angle
         self.pivot_pos = pivot_pos
@@ -175,6 +175,10 @@ class NeuralNetPlayer(Player):
             pendulum.move_right(MOVE_SENSITIVITY)
         # if action == 2, do nothing
 
+    def create_child(self, mutation_rate: float) -> "NeuralNetPlayer":
+        # TODO: Take current neural network and make small modifications to it
+        return NeuralNetPlayer()
+
 class Game:
     def __init__(self, dt: float, padding: int, width: int, pendulum: Pendulum, player: Player):
         self.dt = dt
@@ -194,7 +198,7 @@ class Game:
     def settings(self) -> Tuple[float, int, int]:
         return self.dt, self.min_x, self.max_x
 
-def main():
+def training():
     # Initialize Pygame
     pygame.init()
 
@@ -208,7 +212,13 @@ def main():
     # pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
     # player = NeuralNetPlayer()
     # game = Game(0.25, 100, width, pendulum, player)
-    games = [Game(0.25, 100, width, Pendulum(numpy.array([width // 2., height // 2.]), 2 * math.pi / 10 * i), NeuralNetPlayer()) for i in range(10)]
+    n_games = 20
+    init_pivot_pos = numpy.array([width // 2., height // 2.])
+    rod_length = 200
+    games = [Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), NeuralNetPlayer()) for i in range(n_games)]
+    losses = [0 for _ in range(n_games)]
+    n_steps = 600
+    curr_steps = 0
 
     running = True
     while running:
@@ -228,8 +238,14 @@ def main():
         #
         # pendulum = game.pendulum
 
-        for game in games:
+        for i, game in enumerate(games):
             game.step()
+            # goal = numpy.array([width // 2., height // 2. + rod_length])
+            # goal_to_bob = game.pendulum.bob_pos - goal
+            # distance = numpy.sqrt(goal_to_bob.dot(goal_to_bob))
+            top = height // 2. - rod_length
+            distance = abs(game.pendulum.bob_pos[1] - top)
+            losses[i] += distance
 
         # Clear the screen
         screen.fill(WHITE)
@@ -248,7 +264,33 @@ def main():
         # Cap the frame rate
         clock.tick(60)
 
+        # Do genetic evolution
+        if curr_steps == n_steps:
+            fitnesses = [1 / (1 + loss) for loss in losses]
+            total_fitness = sum(fitnesses)
+            new_games = []
+            for fitness, game in zip(fitnesses, games):
+                prop_fit = fitness / total_fitness
+                n_children = math.floor(prop_fit * n_games)
+                print(fitness, prop_fit, n_children)
+                # should spawn children, but for now just pass on self
+                new_games.extend([Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), game.player) for _ in range(n_children)])
+            n_children_total = min(int(0.6 * n_games), len(new_games))
+            new_games = new_games[:n_children_total]
+            n_randos = n_games - n_children_total
+            new_games.extend([Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), NeuralNetPlayer()) for _ in range(n_randos)])
+            print("n_children_total", n_children_total, "n_randos", n_randos, "len(new_games)", len(new_games))
+            games = new_games
+            losses = [0 for _ in range(n_games)]
+            curr_steps = 0
+        else:
+            curr_steps += 1
+
+
     pygame.quit()
+
+def main():
+    training()
 
 if __name__ == "__main__":
     main()
