@@ -17,6 +17,11 @@ AIR_RESISTANCE = 0.1
 
 MOVE_SENSITIVITY = 8
 
+WIDTH = 800
+HEIGHT = 600
+
+ROD_LENGTH = 200
+
 class Pendulum:
     def __init__(self, pivot_pos: numpy.ndarray, angle: float, rod_length: int):
         self.rod_length = rod_length
@@ -205,24 +210,38 @@ class Game:
     def settings(self) -> Tuple[float, int, int]:
         return self.dt, self.min_x, self.max_x
 
+class GameBuilder:
+    def __init__(self):
+        self.dt = 0.25
+        self.padding = 100
+        self.width = WIDTH
+        self.pendulum = Pendulum(numpy.array([WIDTH // 2., HEIGHT // 2.]), 0, 200)
+        self.player = None
+
+    def with_player(self, player: Player) -> "GameBuilder":
+        self.player = player
+        return self
+    
+    def build(self) -> Game:
+        assert self.player is not None
+        return Game(self.dt, self.padding, self.width, self.pendulum, self.player)
+
 def training():
     # Initialize Pygame
     pygame.init()
 
     # Set up the display
-    width, height = 800, 600
-    screen = pygame.display.set_mode((width, height))
+    padding = 100
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Pendulum Simulation")
 
     clock = pygame.time.Clock()
 
     # pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
     # player = NeuralNetPlayer()
-    # game = Game(0.25, 100, width, pendulum, player)
+    # game = Game(dt, padding, width, pendulum, player)
     n_games = 64
-    init_pivot_pos = numpy.array([width // 2., height // 2.])
-    rod_length = 200
-    games = [Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), NeuralNetPlayer()) for i in range(n_games)]
+    games = [GameBuilder().with_player(NeuralNetPlayer()).build() for _ in range(n_games)]
     losses = [0 for _ in range(n_games)]
     min_losses = [99999999 for _ in range(n_games)]
     n_steps = 600
@@ -248,10 +267,10 @@ def training():
 
         for i, game in enumerate(games):
             game.step()
-            # goal = numpy.array([width // 2., height // 2. + rod_length])
+            # goal = numpy.array([width // 2., height // 2. + ROD_LENGTH])
             # goal_to_bob = game.pendulum.bob_pos - goal
             # distance = numpy.sqrt(goal_to_bob.dot(goal_to_bob))
-            top = height // 2. - rod_length
+            top = HEIGHT // 2. - ROD_LENGTH
             distance = abs(game.pendulum.bob_pos[1] - top)
             losses[i] += distance
             min_losses[i] = min(min_losses[i], distance)
@@ -276,37 +295,20 @@ def training():
         # Do genetic evolution
         if curr_steps == n_steps:
             # Reward them for their min distance as well as total loss
-            max_loss = n_steps * rod_length * 2
+            max_loss = n_steps * ROD_LENGTH * 2
             fitnesses = [max_loss * max_loss / (10 * (min_loss * 10 + loss)) for min_loss, loss in zip(min_losses, losses)]
             print(min(losses), max(fitnesses))
-            print(losses)
-            print(fitnesses)
-            total_fitness = sum(fitnesses)
             new_games = []
-            # Make new games proportional to their share of total fitness
-            # for fitness, game in zip(fitnesses, games):
-            #     prop_fit = fitness / total_fitness
-            #     n_children = math.floor(prop_fit * n_games)
-            #     print(fitness, prop_fit, n_children)
-            #     # should spawn children, but for now just pass on self
-            #     # append itself + children
-            #     new_games.append(Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), game.player))
-            #     assert isinstance(game.player, NeuralNetPlayer)
-            #     new_games.extend([Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), game.player.create_child(0.05)) for _ in range(n_children - 1)])
-
             # Take the top 25% and make 3 new games from them: themselves and 2 children
-            for fitness, game in sorted(zip(fitnesses, games), key = lambda x: x[0], reverse=True)[:n_games//4]:
-                prop_fit = fitness / total_fitness
-                n_children = math.floor(prop_fit * n_games)
-                # should spawn children, but for now just pass on self
-                # append itself + children
-                new_games.append(Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), game.player))
+            for _fitness, game in sorted(zip(fitnesses, games), key = lambda x: x[0], reverse=True)[:n_games//4]:
+                new_games.append(GameBuilder().with_player(game.player).build())
                 assert isinstance(game.player, NeuralNetPlayer)
-                new_games.extend([Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), game.player.create_child(0.05)) for _ in range(2)])
+                new_games.extend([GameBuilder().with_player(game.player.create_child(0.05)).build() for _ in range(2)])
             n_children_total = min(int(0.75 * n_games), len(new_games))
             new_games = new_games[:n_children_total]
             n_randos = n_games - n_children_total
-            new_games.extend([Game(0.25, 100, width, Pendulum(numpy.array(init_pivot_pos, copy=True), 0, rod_length), NeuralNetPlayer()) for _ in range(n_randos)])
+            random_games = [GameBuilder().with_player(NeuralNetPlayer()).build() for _ in range(n_randos)]
+            new_games.extend(random_games)
             print("n_children_total", n_children_total, "n_randos", n_randos, "len(new_games)", len(new_games))
             games = new_games
             losses = [0 for _ in range(n_games)]
