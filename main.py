@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from enum import Enum
 from typing import Optional, Tuple
 import pygame
 import math
@@ -21,6 +22,12 @@ WIDTH = 800
 HEIGHT = 600
 
 ROD_LENGTH = 200
+
+class Mode(Enum):
+    SINGLE_PLAYER = 0
+    TRAINING = 1
+
+MODE = Mode.SINGLE_PLAYER
 
 class Pendulum:
     def __init__(self, pivot_pos: numpy.ndarray, angle: float, rod_length: int):
@@ -210,6 +217,9 @@ class Game:
     def settings(self) -> Tuple[float, int, int]:
         return self.dt, self.min_x, self.max_x
 
+    def draw_state(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        return (self.pendulum.pivot_pos[0], self.pendulum.pivot_pos[1]), (self.pendulum.bob_pos[0], self.pendulum.bob_pos[1])
+
 class GameBuilder:
     def __init__(self):
         self.dt = 0.25
@@ -226,26 +236,22 @@ class GameBuilder:
         assert self.player is not None
         return Game(self.dt, self.padding, self.width, self.pendulum, self.player)
 
-def training():
-    # Initialize Pygame
-    pygame.init()
+def draw_pendulum(
+    screen: pygame.Surface,
+    color: Tuple[int, int, int],
+    pivot_pos: Tuple[int, int],
+    bob_pos: Tuple[int, int],
+):
+    pygame.draw.line(screen, color, pivot_pos, bob_pos, 2)
+    pygame.draw.circle(screen, color, bob_pos, 10)
 
-    # Set up the display
-    padding = 100
+def single_player():
+    pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Pendulum Simulation")
-
     clock = pygame.time.Clock()
 
-    # pendulum = Pendulum(numpy.array([width // 2., height // 2.]), 6 * math.pi / 8)
-    # player = NeuralNetPlayer()
-    # game = Game(dt, padding, width, pendulum, player)
-    n_games = 64
-    games = [GameBuilder().with_player(NeuralNetPlayer()).build() for _ in range(n_games)]
-    losses = [0 for _ in range(n_games)]
-    min_losses = [99999999 for _ in range(n_games)]
-    n_steps = 600
-    curr_steps = 0
+    game = GameBuilder().with_player(HumanPlayer()).build()
 
     running = True
     while running:
@@ -253,23 +259,51 @@ def training():
             if event.type == pygame.QUIT:
                 running = False
 
-        # keys = pygame.key.get_pressed()
-        # if keys[pygame.K_1]:
-        #     game.set_player(HumanPlayer())
-        # elif keys[pygame.K_2]:
-        #     game.set_player(PhysicsPlayer())
-        # elif keys[pygame.K_3]:
-        #     game.set_player(NeuralNetPlayer())
-        #
-        # game.step()
-        #
-        # pendulum = game.pendulum
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_1]:
+            game.set_player(HumanPlayer())
+        elif keys[pygame.K_2]:
+            game.set_player(PhysicsPlayer())
+        elif keys[pygame.K_3]:
+            game.set_player(NeuralNetPlayer())
+
+        game.step()
+
+        screen.fill(WHITE)
+
+        # Draw the pendulum
+        pivot_pos, bob_pos = game.draw_state()
+        draw_pendulum(screen, BLACK, pivot_pos, bob_pos)
+
+        # Update the display
+        pygame.display.flip()
+
+        # Cap the frame rate
+        clock.tick(60)
+    pygame.quit()
+
+def training():
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Pendulum Simulation")
+    clock = pygame.time.Clock()
+
+    n_games = 64 if Mode.TRAINING else 1
+    games = [GameBuilder().with_player(NeuralNetPlayer()).build() for _ in range(n_games)]
+    losses = [0 for _ in range(n_games)]
+    min_losses = [99999999 for _ in range(n_games)]
+    n_steps = 600
+    curr_steps = 0
+    colors = [(255 // n_games * i, 0, 255) for i in range(n_games)]
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
         for i, game in enumerate(games):
             game.step()
-            # goal = numpy.array([width // 2., height // 2. + ROD_LENGTH])
-            # goal_to_bob = game.pendulum.bob_pos - goal
-            # distance = numpy.sqrt(goal_to_bob.dot(goal_to_bob))
             top = HEIGHT // 2. - ROD_LENGTH
             distance = abs(game.pendulum.bob_pos[1] - top)
             losses[i] += distance
@@ -279,12 +313,8 @@ def training():
         screen.fill(WHITE)
 
         # Draw the pendulum
-        for i, game in enumerate(games):
-            pivot_pos = (game.pendulum.pivot_pos[0], game.pendulum.pivot_pos[1])
-            bob_pos = (game.pendulum.bob_pos[0], game.pendulum.bob_pos[1])
-            color = (255 // len(games) * i, 0, 255)
-            pygame.draw.line(screen, color, pivot_pos, bob_pos, 2)
-            pygame.draw.circle(screen, color, bob_pos, 10)
+        for color, (pivot_pos, bob_pos) in zip(colors, [game.draw_state() for game in games]):
+            draw_pendulum(screen, color, pivot_pos, bob_pos)
 
         # Update the display
         pygame.display.flip()
@@ -315,12 +345,15 @@ def training():
             curr_steps = 0
         else:
             curr_steps += 1
-
-
     pygame.quit()
 
 def main():
-    training()
+    if MODE == Mode.SINGLE_PLAYER:
+        single_player()
+    elif MODE == Mode.TRAINING:
+        training()
+    else:
+        assert False, "Invalid mode"
 
 if __name__ == "__main__":
     main()
